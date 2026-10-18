@@ -1,6 +1,6 @@
 # workflow-lint
 
-Checks exported n8n workflows for three mistakes that fail without an error. Node 18 or
+Checks exported n8n workflows for three mistakes that fail without an error. Node 22 or
 later, nothing to install.
 
 ```bash

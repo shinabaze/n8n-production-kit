@@ -14,7 +14,7 @@ with an importable demo workflow and tests that run offline, with no keys.
 
 ## Run it
 
-You need Node 18 or later and Python 3.9 or later. There is nothing to install.
+You need Node 22 or later and Python 3.10 or later. There is nothing to install.
 
 ```bash
 git clone https://github.com/shinabaze/n8n-production-kit
