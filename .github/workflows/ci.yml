@@ -28,3 +28,10 @@ jobs:
           bad=$(git log --format="%an <%ae>|%cn <%ce>" | grep -vxF "$me|$me" || true)
           if [ -n "$bad" ]; then echo "commits by someone else: $bad"; exit 1; fi
           if git log --format=%B | grep -iE "^co-authored[-]by:|generated with"; then exit 1; fi
+
+  demos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import and run the four demo workflows in a real n8n
+        run: bash scripts/n8n-smoke.sh

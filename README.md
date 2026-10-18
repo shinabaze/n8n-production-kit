@@ -28,6 +28,9 @@ node workflow-lint/lint.mjs workflow-lint/fixtures
 
 The last command exits 1 on purpose: three of its fixtures are built to fail.
 
+With Docker, `bash scripts/n8n-smoke.sh` imports the four demos into a throwaway n8n
+container and runs each one. CI does that on every push.
+
 To try a tool inside n8n, open Workflows, choose Import from File, and pick that tool's
 `demo-workflow.json`. The Code node tools read keys from the n8n environment, see
 [`.env.example`](.env.example).
