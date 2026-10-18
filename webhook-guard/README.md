@@ -19,7 +19,8 @@ curl -X POST https://your-n8n/webhook/your-path \
   -H "x-hook-secret: $HOOK_SECRET" -H "Content-Type: application/json" -d '{}'
 ```
 
-Or import [`demo-workflow.json`](demo-workflow.json), activate it and call
+`guard.js` only runs inside a Code node, so `node guard.js` fails. Or import
+[`demo-workflow.json`](demo-workflow.json), activate it and call
 `/webhook/guarded-demo` with and without the header.
 
 ## Why a refused call still gets 200

@@ -17,7 +17,8 @@ and so does its retry, because it retries the same key on the same model.
 4. Set the node's On Error to "Continue (using error output)" and wire the second output
    to whatever should handle a failure.
 
-Or import [`demo-workflow.json`](demo-workflow.json) and run it. With no key set, both items
+`failover.js` only runs inside a Code node, so `node failover.js` fails. Or import
+[`demo-workflow.json`](demo-workflow.json) and run it. With no key set, both items
 go to the Failed branch with the reason, which shows the error output working.
 
 ## What each failure means

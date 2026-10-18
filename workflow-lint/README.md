@@ -33,7 +33,7 @@ email.
 
 **batched-autodetect.** An HTTP Request node with Batching on and Response Format left on
 autodetect. Autodetect reads each response as a stream, and with batching the early
-responses wait while later requests go out. On n8n 2.4.6 I watched a stalled body leave a
+responses wait while later requests go out. On n8n 2.x I watched a stalled body leave a
 run stuck on "running" for days, with no error. Setting Response Format to JSON fixed it.
 
 ## Try it
