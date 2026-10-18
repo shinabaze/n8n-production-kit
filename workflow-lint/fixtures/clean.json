@@ -1,0 +1,19 @@
+{
+  "name": "fixture: clean",
+  "nodes": [
+    { "id": "1", "name": "Every Morning", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [0, 0], "parameters": {} },
+    { "id": "2", "name": "Fetch Orders", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [220, 0], "parameters": { "url": "https://example.com/orders" } },
+    { "id": "3", "name": "Fetch Refunds", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [440, 0], "executeOnce": true,
+      "parameters": { "url": "https://example.com/refunds", "options": { "batching": { "batch": { "batchSize": 1, "batchInterval": 2000 } }, "response": { "response": { "responseFormat": "json" } } } } },
+    { "id": "4", "name": "Build Report", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [660, 0], "parameters": { "jsCode": "return [{ json: { orders: $('Fetch Orders').all().length, refunds: $('Fetch Refunds').all().length } }];" } },
+    { "id": "5", "name": "Send Report", "type": "n8n-nodes-base.emailSend", "typeVersion": 2.1, "position": [880, 0], "credentials": { "smtp": { "id": "replace-me", "name": "SMTP account" } },
+      "parameters": { "fromEmail": "reports@example.com", "toEmail": "team@example.com", "subject": "Daily report", "emailFormat": "text", "text": "={{ $json.orders }} orders" } }
+  ],
+  "connections": {
+    "Every Morning": { "main": [[{ "node": "Fetch Orders", "type": "main", "index": 0 }]] },
+    "Fetch Orders": { "main": [[{ "node": "Fetch Refunds", "type": "main", "index": 0 }]] },
+    "Fetch Refunds": { "main": [[{ "node": "Build Report", "type": "main", "index": 0 }]] },
+    "Build Report": { "main": [[{ "node": "Send Report", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

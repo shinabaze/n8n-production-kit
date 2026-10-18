@@ -1,0 +1,10 @@
+{
+  "name": "fixture: batched HTTP node on autodetect",
+  "nodes": [
+    { "id": "1", "name": "Run", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+    { "id": "2", "name": "Scrape Pages", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [220, 0],
+      "parameters": { "url": "={{ $json.url }}", "options": { "batching": { "batch": { "batchSize": 1, "batchInterval": 8000 } }, "timeout": 30000 } } }
+  ],
+  "connections": { "Run": { "main": [[{ "node": "Scrape Pages", "type": "main", "index": 0 }]] } },
+  "settings": { "executionOrder": "v1" }
+}

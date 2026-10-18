@@ -1,0 +1,26 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: node --test
+      - run: python -m unittest discover -s safe-dry-run -v
+      - name: The demo workflows pass the lint (the lint's own demo is meant to fail)
+        run: node workflow-lint/lint.mjs llm-failover/demo-workflow.json webhook-guard/demo-workflow.json safe-dry-run/demo-workflow.json
+      - name: Every commit is mine, with no tool credit lines
+        run: |
+          me="Shinabaze Ajiya <198176976+shinabaze@users.noreply.github.com>"
+          bad=$(git log --format="%an <%ae>|%cn <%ce>" | grep -vxF "$me|$me" || true)
+          if [ -n "$bad" ]; then echo "commits by someone else: $bad"; exit 1; fi
+          if git log --format=%B | grep -iE "^co-authored[-]by:|generated with"; then exit 1; fi
