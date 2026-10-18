@@ -1,0 +1,61 @@
+{
+  "name": "Demo: safe dry run target",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Safe dry run\nexample_patch.py rewrites the code in **Say Hello**. Import this, note its id, then run the script with N8N_URL, N8N_API_KEY and WORKFLOW_ID set. Try `--check` first.",
+        "width": 420,
+        "height": 220
+      },
+      "id": "e7c005e9-2e5f-4c76-92ac-b2879ab9249f",
+      "name": "Read Me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -280
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "0e4248da-6322-48b6-9959-1549681e4eaa",
+      "name": "Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { greeting: 'hello' } }];\n"
+      },
+      "id": "d713d4fa-2263-448d-be22-a7ec50b6cbde",
+      "name": "Say Hello",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Run": {
+      "main": [
+        [
+          {
+            "node": "Say Hello",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

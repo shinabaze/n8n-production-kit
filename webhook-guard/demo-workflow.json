@@ -1,0 +1,176 @@
+{
+  "name": "Demo: webhook guard",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Webhook guard\nSet HOOK_SECRET in the n8n environment and activate this workflow.\n\nA call with the right `x-hook-secret` header gets 200. Any other call gets 403, and its execution ends in an error, so refusals show up in the executions list.",
+        "width": 460,
+        "height": 220
+      },
+      "id": "c2c2981b-3266-4eb6-85b6-a4d28c37ae1e",
+      "name": "Read Me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "guarded-demo",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "607e459e-570b-43b9-89da-e689a0b44e08",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "f88b0283-e17b-4c39-a488-cbdb52639e33"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Put this Code node straight after a Webhook node (Run Once for All Items).\n// It lets a call through only when its x-hook-secret header matches $env.HOOK_SECRET.\n\nconst HEADER = 'x-hook-secret'; // n8n hands over header names in lower case\nconst SECRET_ENV = 'HOOK_SECRET';\n\n// Looks at every character even after a mismatch, so the time taken does not show\n// how much of a guess was right.\nfunction sameSecret(given, expected) {\n  let diff = given.length ^ expected.length;\n  for (let i = 0; i < expected.length; i++) {\n    diff |= (given.charCodeAt(i) | 0) ^ expected.charCodeAt(i);\n  }\n  return diff === 0;\n}\n\nlet expected;\ntry { expected = $env[SECRET_ENV]; } catch (e) { expected = undefined; } // n8n can block $env\nif (!expected) {\n  // Fail closed: a guard with no secret to compare must not let everyone in.\n  throw new Error(`Refused: ${SECRET_ENV} is not set, so no call can be checked`);\n}\n\nfor (const item of $input.all()) {\n  const given = String((item.json.headers || {})[HEADER] || '');\n  if (!sameSecret(given, String(expected))) {\n    throw new Error(`Unauthorized: missing or wrong ${HEADER} header`);\n  }\n}\nreturn $input.all();\n"
+      },
+      "id": "0fce1c00-4eb8-4585-b903-126df9bcc7c3",
+      "name": "Verify Hook Secret",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "42d3e23a-c709-409a-baad-f752f364af45",
+              "name": "message",
+              "value": "secret accepted",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "075ba959-91bb-40de-b802-e31ed6a1fbfb",
+      "name": "Do The Work",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true } }}",
+        "options": {}
+      },
+      "id": "c2a81880-5326-45ba-b90d-e9c10ebb3016",
+      "name": "Reply 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'unauthorized' } }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "414844e0-7123-44c8-8e4c-bf4f8f5ba042",
+      "name": "Reply 403",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Refused: missing or wrong x-hook-secret"
+      },
+      "id": "70474a67-496e-4f12-9fcd-2a1eb8056f4e",
+      "name": "Mark Refused",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        680,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Hook Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Hook Secret": {
+      "main": [
+        [
+          {
+            "node": "Do The Work",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply 403",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Do The Work": {
+      "main": [
+        [
+          {
+            "node": "Reply 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply 403": {
+      "main": [
+        [
+          {
+            "node": "Mark Refused",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -98,5 +98,12 @@ class Rules(unittest.TestCase):
         self.assertFalse(self.guard.mentions('if "--checksum" in sys.argv', "--check"))
 
 
+class Demo(unittest.TestCase):
+    def test_demo_shows_all_four_outcomes(self):
+        result = subprocess.run([sys.executable, os.path.join(HERE, "demo.py")],
+                                capture_output=True, text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,174 @@
+{
+  "name": "Demo: LLM failover",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## LLM failover\nSet LLM_KEY_1 (and _2, _3 if you have them) in the n8n environment, then run.\n\nWith no key set, both items go to **Failed**, each with its own reason. That is the error output working.",
+        "width": 420,
+        "height": 220
+      },
+      "id": "7e72f27c-1f70-4fe4-82dc-92a745a90fbb",
+      "name": "Read Me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "979cf192-1ba1-4108-8b53-6ffe32dca1ff",
+      "name": "Run Demo",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Two questions, in the request shape the failover node reads from `request`.\nconst questions = ['Name three uses for a paperclip.', 'Say hello in French.'];\nreturn questions.map((text) => ({ json: { question: text, request: { contents: [{ parts: [{ text }] }] } } }));\n"
+      },
+      "id": "75cccd15-ca90-46a7-9e26-24f9fdb5aa26",
+      "name": "Build Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LLM call with key and model failover, for an n8n Code node (Run Once for All Items).\n// Each input item carries its request body in BODY_FIELD. Paste this whole file into the node.\n\nconst MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest']; // in order of preference\nconst KEY_NAMES = ['LLM_KEY_1', 'LLM_KEY_2', 'LLM_KEY_3']; // env var names, never values\nconst BODY_FIELD = 'request';\nconst CALL_TIMEOUT_MS = 60000;\nconst DEADLINE_MS = 300000; // for the whole node: one slow run must not hold the task runner\nconst UNWELL_AFTER = 2; // 5xx or timeouts on one model before it is skipped\nconst CONCURRENCY = 3;\nconst THROW_ON_FAIL = false; // true fails the node, so the error workflow fires\n\n// The two provider-specific parts. Change these two functions for another API.\nfunction requestFor(model, key, body) {\n  return {\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },\n    body,\n  };\n}\n\n// null when the response has text, otherwise the reason it has none.\nfunction emptyReason(resp) {\n  const candidate = resp?.candidates?.[0];\n  if ((candidate?.content?.parts || []).some((p) => p && p.text)) return null;\n  return candidate?.finishReason || resp?.promptFeedback?.blockReason || 'no text';\n}\n\nconst keys = [];\nfor (const name of KEY_NAMES) {\n  let value;\n  try { value = $env[name]; } catch (e) { value = undefined; } // n8n can block $env\n  if (value && !keys.some((k) => k.value === value)) keys.push({ name, value });\n}\n\nconst helpers = this.helpers;\nconst started = Date.now();\nconst timeLeft = () => DEADLINE_MS - (Date.now() - started);\nconst spent = new Set(); // \"model|key\" pairs that already failed in this run\nconst deadModels = new Set();\nconst unwell = {};\n\n// What a failed call says about the next attempt.\nfunction classify(status, message) {\n  if ([401, 402, 403, 429].includes(status) || /quota|exhausted|api key/i.test(message)) return 'key';\n  if (status === 400 || status === 404 || status === 'EMPTY') return 'model';\n  return 'unwell'; // 5xx, timeout, network\n}\n\nasync function callOnce(model, key, body) {\n  const timeout = Math.max(1000, Math.min(CALL_TIMEOUT_MS, timeLeft()));\n  try {\n    const r = await helpers.httpRequest({\n      ...requestFor(model, key.value, body),\n      json: true, timeout, returnFullResponse: true, ignoreHttpStatusErrors: true,\n    });\n    if (r.statusCode === 200) {\n      const why = emptyReason(r.body);\n      return why ? { ok: false, status: 'EMPTY', message: why } : { ok: true, body: r.body };\n    }\n    return { ok: false, status: r.statusCode, message: String(r.body?.error?.message || r.statusMessage || '') };\n  } catch (e) {\n    return { ok: false, status: 'NET', message: String(e.message || e) };\n  }\n}\n\nfunction failed(i, reason, attempts) {\n  const message = `LLM failover: ${reason}`;\n  if (THROW_ON_FAIL) throw new Error(`${message} | ${attempts.join(' ; ')}`);\n  // The shape n8n's own nodes use, so \"Continue (using error output)\" routes it.\n  return { json: { error: { message, name: 'LLMFailoverError', attempts } }, pairedItem: { item: i } };\n}\n\nasync function runItem(item, i) {\n  const body = item.json?.[BODY_FIELD];\n  if (!body || typeof body !== 'object') return failed(i, `no request body in \"${BODY_FIELD}\"`, []);\n  if (!keys.length) return failed(i, `no key is set (${KEY_NAMES.join(', ')})`, []);\n  const attempts = [];\n  for (const model of MODELS) {\n    if (deadModels.has(model)) continue;\n    for (const key of keys) {\n      if ((unwell[model] || 0) >= UNWELL_AFTER) break;\n      if (spent.has(`${model}|${key.name}`)) continue;\n      if (timeLeft() < 1000) return failed(i, `deadline of ${DEADLINE_MS} ms reached`, attempts);\n      const r = await callOnce(model, key, body);\n      if (r.ok) {\n        return { json: { ...r.body, _failover: { model, key: key.name, failedBefore: attempts } }, pairedItem: { item: i } };\n      }\n      attempts.push(`${model}/${key.name}: ${r.status} ${r.message}`.slice(0, 200));\n      const kind = classify(r.status, r.message);\n      if (kind === 'model') { deadModels.add(model); break; }\n      spent.add(`${model}|${key.name}`);\n      // A 503 or a hang rarely clears within one run, so it counts against the model too.\n      if (kind === 'unwell') unwell[model] = (unwell[model] || 0) + 1;\n    }\n  }\n  return failed(i, 'every model and key failed', attempts);\n}\n\nconst items = $input.all();\nconst out = new Array(items.length);\n// The first item runs alone and learns which pairs are spent, so the rest do not\n// all hit the same dead key at once.\nif (items.length) out[0] = await runItem(items[0], 0);\nlet next = 1;\nasync function worker() {\n  while (next < items.length) {\n    const i = next++;\n    out[i] = await runItem(items[i], i);\n  }\n}\nawait Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));\nreturn out;\n"
+      },
+      "id": "17d37700-af30-4f95-9fcf-1131fc0661b0",
+      "name": "LLM Failover",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8b6f26ce-d1b8-43ee-abca-cbb31b246099",
+              "name": "question",
+              "value": "={{ $('Build Requests').item.json.question }}",
+              "type": "string"
+            },
+            {
+              "id": "f2eed400-bb8b-41b7-8b73-6e0ee1c3df4c",
+              "name": "answer",
+              "value": "={{ $json.candidates[0].content.parts[0].text }}",
+              "type": "string"
+            },
+            {
+              "id": "ce509e7c-7afb-4d16-9512-1ef75e7909e6",
+              "name": "model",
+              "value": "={{ $json._failover.model }}",
+              "type": "string"
+            },
+            {
+              "id": "a2b04e68-dec3-4ffc-9f9e-c4f829e5f26a",
+              "name": "key",
+              "value": "={{ $json._failover.key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fc8722fe-b1ac-4c09-a38a-af0ed06d4d7f",
+      "name": "Answer",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        680,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8887ebe7-bdd8-448b-850d-7155d71f0680",
+              "name": "question",
+              "value": "={{ $('Build Requests').item.json.question }}",
+              "type": "string"
+            },
+            {
+              "id": "e4595dfa-45af-477a-ba1c-e8c08461704e",
+              "name": "reason",
+              "value": "={{ $json.error.message }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0fb0cf43-10ba-479f-8f7b-9447be68736d",
+      "name": "Failed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        680,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Run Demo": {
+      "main": [
+        [
+          {
+            "node": "Build Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Requests": {
+      "main": [
+        [
+          {
+            "node": "LLM Failover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Failover": {
+      "main": [
+        [
+          {
+            "node": "Answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

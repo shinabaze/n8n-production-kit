@@ -1,0 +1,114 @@
+{
+  "name": "Demo: fan-in (fails on purpose)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Fan-in\nRun this. **Build Report** fails, because it runs as soon as Fetch Orders finishes, before Fetch Refunds has run.\n\nThen run `node workflow-lint/lint.mjs` on this file. The fix: chain Fetch Orders, then Fetch Refunds, then Build Report.",
+        "width": 460,
+        "height": 240
+      },
+      "id": "dff2564b-2589-4738-8fb1-0a8b16a1628c",
+      "name": "Read Me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -380
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b7537927-391b-4a07-a26f-2c80a30d32c8",
+      "name": "Run Demo",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { orders: 12 } }];\n"
+      },
+      "id": "4ca804e7-61f9-46f8-aa0d-22a239993ccd",
+      "name": "Fetch Orders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { refunds: 2 } }];\n"
+      },
+      "id": "6fde0a9a-3a79-4ee3-829a-d25411d86017",
+      "name": "Fetch Refunds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const orders = $('Fetch Orders').first().json.orders;\nconst refunds = $('Fetch Refunds').first().json.refunds; // has not run yet\nreturn [{ json: { orders, refunds } }];\n"
+      },
+      "id": "878241fe-5255-4f55-a4dd-798e702522eb",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Run Demo": {
+      "main": [
+        [
+          {
+            "node": "Fetch Orders",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Refunds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Orders": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Refunds": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
