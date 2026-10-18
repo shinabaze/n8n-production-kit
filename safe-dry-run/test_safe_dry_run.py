@@ -29,6 +29,7 @@ def run_patch(*flags, workflow=WORKFLOW, env=None):
             env={**os.environ, "N8N_URL": url, "SAFE_DRY_RUN": "", **(env or {})})
     finally:
         server.shutdown()
+        server.server_close()
     return result.returncode, result.stdout + result.stderr, requests, state
 
 

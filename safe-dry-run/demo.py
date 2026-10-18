@@ -22,6 +22,7 @@ def run(title, flags=(), workflow=DEMO, expect=0):
             env={**os.environ, "N8N_URL": url, "SAFE_DRY_RUN": ""}, timeout=60)
     finally:
         server.shutdown()
+        server.server_close()
     print(f"{title}\n  exit {result.returncode}, requests the fake n8n saw: "
           + (" ".join(method for method, _ in requests) or "none"))
     for line in (result.stdout + result.stderr).strip().splitlines():
