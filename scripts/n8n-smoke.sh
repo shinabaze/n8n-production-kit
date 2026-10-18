@@ -99,15 +99,19 @@ if [ "$right $wrong $none" != "200 403 403" ]; then
 fi
 
 sleep 3 # let the refused runs finish saving
-docker stop "$NAME" >/dev/null
-docker cp "$NAME:/home/node/.n8n/database.sqlite" "$OUT/database.sqlite"
-python3 - "$OUT/database.sqlite" "$guard" <<'PY'
+docker stop -t 30 "$NAME" >/dev/null
+# The whole folder, so SQLite's -wal file comes too: recent rows can still be in it.
+docker cp "$NAME:/home/node/.n8n/." "$OUT/n8n-data"
+python3 - "$OUT/n8n-data/database.sqlite" "$guard" <<'PY'
 import sqlite3, sys
 
-rows = sqlite3.connect(sys.argv[1]).execute(
-    "select status from execution_entity where workflowId = ? order by id", (sys.argv[2],)).fetchall()
+db = sqlite3.connect(sys.argv[1])
+rows = db.execute(
+    'select status from execution_entity where "workflowId" = ? order by id', (sys.argv[2],)).fetchall()
 statuses = [r[0] for r in rows]
 print("webhook-guard: executions saved as", statuses)
-assert statuses == ["success", "error", "error"], statuses
+if statuses != ["success", "error", "error"]:
+    print("every execution:", db.execute('select "workflowId", mode, status from execution_entity').fetchall())
+    sys.exit("FAIL: expected success, error, error")
 PY
 echo "all four demos ran in $IMAGE"
